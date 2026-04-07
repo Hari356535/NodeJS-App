@@ -1,0 +1,95 @@
+name: Security Scan Pipeline
+
+on:
+  push:
+    branches:
+      - main
+
+  workflow_dispatch:
+    inputs:
+      scan_level:
+        description: "Scan severity level"
+        required: true
+        default: "high"
+        type: choice
+        options:
+          - low
+          - medium
+          - high
+          - critical
+
+jobs:
+
+  security_scan:
+    name: Security & Vulnerability Scan
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      security-events: write
+
+    steps:
+
+    - name: Checkout Repository
+      uses: actions/checkout@v4
+
+    ########################################
+    # Node Environment
+    ########################################
+
+    - name: Setup Node
+      uses: actions/setup-node@v4
+      with:
+        node-version: "20"
+
+    ########################################
+    # Node Dependency Scan
+    ########################################
+
+    - name: Node Dependency Scan
+      run: |
+        if [ -f package.json ]; then
+          npm install --package-lock-only
+          npm audit --audit-level=high || true
+        else
+          echo "No Node project found"
+        fi
+
+    ########################################
+    # OSV Scanner
+    ########################################
+
+    - name: Run OSV Dependency Scan
+      uses: google/osv-scanner-action@v1
+
+    ########################################
+    # Semgrep SAST
+    ########################################
+
+    - name: Run Semgrep Security Scan
+      uses: returntocorp/semgrep-action@v1
+      with:
+        config: p/security-audit
+
+    ########################################
+    # Secret Detection
+    ########################################
+
+    - name: Run Gitleaks Secret Scan
+      uses: gitleaks/gitleaks-action@v2
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    ########################################
+    # Upload Reports
+    ########################################
+
+    - name: Upload Scan Reports
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: security-scan-results
+        path: |
+          *.sarif
+          *.json
+          *.txt
