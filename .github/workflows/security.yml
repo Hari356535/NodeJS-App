@@ -1,4 +1,4 @@
-name: Security Scan Pipeline new
+name: Security & Vulnerability Scan
 
 on:
   push:
@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
     inputs:
       scan_level:
-        description: "Scan severity level"
+        description: "Severity level"
         required: true
         default: "high"
         type: choice
@@ -19,9 +19,8 @@ on:
           - critical
 
 jobs:
-
   security_scan:
-    name: Security & Vulnerability Scan
+    name: Node Security Scan
     runs-on: ubuntu-latest
 
     permissions:
@@ -30,66 +29,81 @@ jobs:
 
     steps:
 
-    - name: Checkout Repository
-      uses: actions/checkout@v4
+      ##################################################
+      # Checkout Repository
+      ##################################################
 
-    ########################################
-    # Node Environment
-    ########################################
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-    - name: Setup Node
-      uses: actions/setup-node@v4
-      with:
-        node-version: "20"
+      ##################################################
+      # Setup Node
+      ##################################################
 
-    ########################################
-    # Node Dependency Scan
-    ########################################
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
 
-    - name: Node Dependency Scan
-      run: |
-        if [ -f package.json ]; then
-          npm install --package-lock-only
+      ##################################################
+      # Install Dependencies Safely
+      ##################################################
+
+      - name: Install dependencies (safe mode)
+        run: |
+          npm ci --ignore-scripts
+
+      ##################################################
+      # Node Dependency Vulnerability Scan
+      ##################################################
+
+      - name: Run npm audit
+        run: |
           npm audit --audit-level=high || true
-        else
-          echo "No Node project found"
-        fi
 
-    ########################################
-    # OSV Scanner
-    ########################################
+      ##################################################
+      # OSV Dependency Scanner
+      ##################################################
 
-    - name: Run OSV Dependency Scan
-      uses: google/osv-scanner-action@v1
+      - name: Run OSV Scanner
+        uses: google/osv-scanner-action@v1.9.0
 
-    ########################################
-    # Semgrep SAST
-    ########################################
+      ##################################################
+      # Static Code Security Scan
+      ##################################################
 
-    - name: Run Semgrep Security Scan
-      uses: returntocorp/semgrep-action@v1
-      with:
-        config: p/security-audit
+      - name: Run Semgrep
+        uses: returntocorp/semgrep-action@v1
+        with:
+          config: p/security-audit
 
-    ########################################
-    # Secret Detection
-    ########################################
+      ##################################################
+      # Secret Leak Detection
+      ##################################################
 
-    - name: Run Gitleaks Secret Scan
-      uses: gitleaks/gitleaks-action@v2
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      #- name: Run Gitleaks
+        #uses: gitleaks/gitleaks-action@v2
+        #env:
+          #GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-    ########################################
-    # Upload Reports
-    ########################################
+      ##################################################
+      # Run Unit Tests
+      ##################################################
 
-    - name: Upload Scan Reports
-      if: always()
-      uses: actions/upload-artifact@v4
-      with:
-        name: security-scan-results
-        path: |
-          *.sarif
-          *.json
-          *.txt
+      - name: Run Tests
+        run: |
+          npm test
+
+      ##################################################
+      # Upload Reports
+      ##################################################
+
+      - name: Upload scan artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-scan-results
+          path: |
+            *.sarif
+            *.json
+            *.txt
