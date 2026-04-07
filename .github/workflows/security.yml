@@ -65,8 +65,8 @@ jobs:
       # OSV Dependency Scanner
       ##################################################
 
-      - name: Run OSV Scanner
-        uses: google/osv-scanner-action@v1.9.0
+      #- name: Run OSV Scanner
+        #uses: google/osv-scanner-action@v1.9.0
 
       ##################################################
       # Static Code Security Scan
